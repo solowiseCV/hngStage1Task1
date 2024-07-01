@@ -1,7 +1,4 @@
 import axios from "axios";
-import dotenv from 'dotenv'
-dotenv.config()
-
 export const clientInfo = async (req, res, next) => {
     const visitorName = req.query.visitor_name;
 
@@ -9,26 +6,20 @@ export const clientInfo = async (req, res, next) => {
         return res.status(400).json({ error: 'Visitor name is required' });
     }
 
-    // To handle the client IP address
-    let clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
-
-    // Handle IPv6-mapped IPv4 addresses
-    if (clientIp.includes(':')) {
-        clientIp = clientIp.split(':').pop();
-    }
-
     try {
-        // Using ipapi API to get the location of the user
-        const locationResponse = await axios.get(`https://ipapi.co/${clientIp}/json/`);
-        const { city } = locationResponse.data;
-console.log(clientIp);
-        if (!city) {
-            return res.status(400).json({ error: 'Unable to determine city from IP address' });
+        // Get location information from ip-api (includes getting the user's IP address)
+        const locationResponse = await axios.get(`http://ip-api.com/json/`);
+        const { query: clientIp, city, status, message } = locationResponse.data;
+
+        if (status !== 'success') {
+            console.error(`Error from ip-api: ${message}`);
+            return res.status(400).json({ error: 'Unable to determine location from IP address' });
         }
 
+        console.log(`Client IP: ${clientIp}`);
         console.log(`Determined city: ${city}`);
 
-        // Using OpenWeatherMap API to get the weather information
+        // Get weather information from OpenWeatherMap
         const weatherResponse = await axios.get(`https://api.openweathermap.org/data/2.5/weather`, {
             params: {
                 q: city,
@@ -46,6 +37,11 @@ console.log(clientIp);
         });
     } catch (error) {
         console.error('Error occurred:', error.response ? error.response.data : error.message);
+
+        if (error.response && error.response.status === 400) {
+            return res.status(400).json({ error: 'Bad request to OpenWeatherMap API' });
+        }
+
         res.status(500).json({ error: 'Internal Server Error' });
     }
 };
