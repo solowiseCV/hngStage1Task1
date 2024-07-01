@@ -1,4 +1,6 @@
 import axios from "axios";
+
+
 export const clientInfo = async (req, res, next) => {
     const visitorName = req.query.visitor_name;
 
@@ -7,12 +9,12 @@ export const clientInfo = async (req, res, next) => {
     }
 
     try {
-        // Get location information from ip-api (includes getting the user's IP address)
-        const locationResponse = await axios.get(`http://ip-api.com/json/`);
-        const { query: clientIp, city, status, message } = locationResponse.data;
+        // Get location information from ipapi (includes getting the user's IP address)
+        const locationResponse = await axios.get(`https://ipapi.co/json/`);
+        const { ip: clientIp, city, error } = locationResponse.data;
 
-        if (status !== 'success') {
-            console.error(`Error from ip-api: ${message}`);
+        if (error) {
+            console.error(`Error from ipapi: ${error.message}`);
             return res.status(400).json({ error: 'Unable to determine location from IP address' });
         }
 
