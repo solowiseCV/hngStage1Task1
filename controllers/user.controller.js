@@ -1,80 +1,54 @@
-import axios from "axios";
-import dotenv from "dotenv";
+import axios from 'axios';
 
-dotenv.config();
-
-export const clientInfo = async (req, res, next) => {
-    const visitorName = req.query.visitor_name;
-
-    if (!visitorName) {
-        return res.status(400).json({ error: 'Visitor name is required' });
-    }
-
-    let clientIp;
-
+export const clientInfo = async (req, res) => {
     try {
-        // Extract IP address
-        clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
+        const userName = req.query.visitorName;
+        if (!userName) {
+            return res.status(400).json({ message: 'Visitor name is required' });
+        }
+
+        // Retrieve client's IP address from req.headers or req.socket
+        let clientsIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress || '127.0.0.1'; 
+
+        // const testIP = '8.8.8.8'; 
+        const geoResponse = await axios.get(`https://ipapi.co/${clientsIp}/json/`);
+        if (geoResponse.data.error) throw new Error('Unable to geo locate IP address.');
+
+        const { latitude, longitude, city, region, country_name } = geoResponse.data;
+
+        const weatherResponse = await axios.get('https://api.openweathermap.org/data/2.5/weather', {
+            params: {
+                lat: latitude,
+                lon: longitude,
+                appid: process.env.WEATHER_APP_API_KEY, // Use process.env.WEATHER_APP_API_KEY
+                units: 'metric'
+            }
+        });
+
+        const weatherData = weatherResponse.data;
 
         // Handle IPv6-mapped IPv4 addresses
-        if (clientIp.startsWith('::ffff:')) {
-            clientIp = clientIp.split(':').pop();
+        if (clientsIp.includes('::ffff:')) {
+            clientsIp = clientsIp.split(':').pop();
         }
 
-        req.clientIp = clientIp;
-        next();
-    } catch (error) {
-        return next(error);
-    }
-
-    console.log(clientIp);
-
-    let city;
-
-    try {
-        // First try to get location information from ipapi using the extracted client IP
-        const ipapiResponse = await axios.get(`https://ipapi.co/${clientIp}/json/`);
-        if (ipapiResponse.data.error) {
-            throw new Error(ipapiResponse.data.reason);
-        }
-        city = ipapiResponse.data.city;
-    } catch (error) {
-        console.error(`ipapi failed: ${error.message}. Trying ip-api.com...`);
-        // If ipapi fails, fallback to ip-api.com
-        const ipApiResponse = await axios.get(`http://ip-api.com/json/${clientIp}`);
-        if (ipApiResponse.data.status !== 'success') {
-            throw new Error(ipApiResponse.data.message);
-        }
-        city = ipApiResponse.data.city;
-    }
-
-    console.log(`Client IP: ${clientIp}`);
-    console.log(`Determined city: ${city}`);
-
-    try {
-        // Get weather information from OpenWeatherMap
-        const weatherResponse = await axios.get(`https://api.openweathermap.org/data/2.5/weather`, {
-            params: {
-                q: city,
-                appid: process.env.OPENWEATHERMAP_API_KEY,
-                units: 'metric',
+        // Return all relevant data including weather
+        return res.status(200).json({
+            clientsIp,
+            visitorName: userName,
+            location: {
+                city,
+                region,
+                country: country_name,
+                latitude,
+                longitude
             },
-        });
-
-        const temperature = weatherResponse.data.main.temp;
-
-        res.json({
-            client_ip: clientIp,
-            location: city,
-            greeting: `Hello, ${visitorName}!, the temperature is ${temperature} degrees Celsius in ${city}`,
+            weather: {
+                temperature: weatherData.main.temp,
+                description: weatherData.weather[0].description
+            }
         });
     } catch (error) {
-        console.error('Error occurred:', error.response ? error.response.data : error.message);
-
-        if (error.response && error.response.status === 400) {
-            return res.status(400).json({ error: 'Bad request to OpenWeatherMap API' });
-        }
-
-        res.status(500).json({ error: 'Internal Server Error' });
+        res.status(500).json({ message: error.message });
     }
 };
