@@ -12,7 +12,7 @@ export const clientInfo = async (req, res) => {
 
         // const testIP = '8.8.8.8'; 
         const geoResponse = await axios.get(`https://ipapi.co/${clientsIp}/json/`);
-        if (geoResponse.data.error) throw new Error('Unable to geo locate IP address.');
+        if (geoResponse.data.error) throw new Error('Unable to locate IP address.');
 
         const { latitude, longitude, city, region, country_name } = geoResponse.data;
 
